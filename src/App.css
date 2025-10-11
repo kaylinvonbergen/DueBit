@@ -1,38 +1,262 @@
+:root {
+  --scale: 1;
+  --dark: #18181B;
+  --light: #D4D4D4;
+  --light-25: rgba(255, 255, 255, .10);
+  --light-50: rgba(255, 255, 255, .25);
+  --light-75: rgba(255, 255, 255, .50);
+  --salmon: #D59286;
+  --sage: #8EA28B;
+  --indigo: #9E99BC;
+  --red: #FF8E8E;
+  --orange: #E6B781;
+  --yellow: #FFE9CA;
+  --green: #C6EBC2;
+  --aqua: #85C0CA;
+  --blue: #B1D3FF;
+  --magenta: #C298BC;
+  --mid-opaque: 50%;
+  --quarter-opaque: 50%;
+
+
+}
+
+
+
 .App {
-  text-align: center;
+  height: 100%;
+  min-width: 800px;
+  min-height: 800px;
+  width: 100%;
+  overflow: hidden;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.main{
+  height: 100%;
+  width: 100%;
+  background-image: url('../public/duebit-background.png');
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.adjacent-content{
   display: flex;
+  width: 100%;
+  align-items: flex-start;
+  height: fit-content;
+}.vertical {
   flex-direction: column;
+  gap: 20px;
+  height: 100%;
+  margin-top: 0;
+}.with-gap{
+  gap: 20px;
+  height: 100%;
+  margin-top: 20px;
+}
+.no-gap{
+  gap:0;
+}
+
+
+
+.logo{
+  height: 8vh;
+}
+.bar {
+  display: flex;
+  background-color: var(--light-50);
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+} 
+.top {
+  width: 90vw;
+  height: 10vh;
+  border-bottom: 2px solid var(--dark);
+}.side{
+  flex-direction: column;
+  width: 10vw;
+  height: 90vh;
+  min-width: 100px;
+  border-right: 2px solid var(--dark);
+  justify-content: start;
+}.corner{
+  width: 10vw;
+  height: 10vh;
+  min-width: 100px;
+  background-color: var(--light-75);
+  border-bottom: 2px solid var(--dark);
+  border-right: 2px solid var(--dark);
+}
+
+.content{
+  align-content: center;
   align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  width: 90%;
+  box-sizing: border-box;
+  padding: 20px;
+}
+.block{
+  
+  align-items: start;
+  background-color: var(--light-25);
+  border: 2px solid var(--dark);
+  text-align: left;
+}.expo{
+  height: 100px;
+  width: 100%;
+}.task-section{
+  overflow-y: scroll;
+  overflow-x: hidden;
+  height: 540px;
+  width: 100%;
+}.time-section{
+  height: 259px;
+  width: 100%;
+}.tba-section{
+  height: 256px;
+  width: 100%;
 }
 
-.App-link {
-  color: #61dafb;
+
+
+.block-heading{
+  font-family: 'Francois One', sans-serif;
+  color: var(--light);
+  margin: 2px 10px;
+  margin-right: auto;
+  ;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.time-heading{
+  font-size: 24px;
+  margin-top: 10px;
+  min-width: 1000px
 }
+
+
+.navigator-button{
+  margin-top: 20px;
+  max-width: 60%;
+  width: 60%;
+  aspect-ratio: 1 / 1;
+  background-color: var(--light-50);
+  border: 2px solid var(--dark);
+  font-family: 'Francois One', sans-serif;
+  font-size: 26px;
+  color: var(--light);
+}
+
+.body-text{
+  font-family: 'Dongle', sans-serif;
+  font-size: 25px;
+  margin: 5px 0 0 5px;
+  line-height: .6;
+}
+
+
+.task-gallery{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+  gap: 7px;
+  scrollbar-width: thin;
+  padding-bottom: 10px;
+  box-sizing: border-box;
+}
+
+
+.task-card{
+  width: 150px;
+  height: 100px;
+  margin-top: 10px;
+  background-color: var(--light-75);
+  border: 2px solid var(--dark);
+}.ghost-card{
+  background-color: transparent;
+}
+.card-heading {
+  margin-left: 5px;
+  margin-top: 5px;
+  color: var(--dark);
+  font-size: 18px;
+  opacity: 90%;
+}
+
+
+
+
+.dropdown {
+  font-family: "Dongle", sans-serif;
+  font-size: 20px;
+  line-height: 0.75;
+  flex-grow: 1;
+  font-size: 25px;
+  background-color: var(--light-75);
+  color: var(--dark);
+  /* border: 1px solid var(--dark); */
+  border-radius: 5px;
+  padding: 0.2rem;
+  width: 150px;
+  /* make not native */
+  appearance: none;
+  /* arrow */
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='5'%3E%3Cpath fill='%231F2C1D' d='M0 0l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 10px 5px;
+  margin: 10px;
+  padding-top: 7px;
+  cursor: pointer;
+  box-sizing: border-box;
+  justify-self: center;
+  align-self: center;
+}
+
+.progress-container{
+  justify-content: center;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  height: fit-content;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+  margin-top: 0;
+  gap:0;
+}
+.progress-text{
+  font-family: 'Dongle', sans-serif;
+  font-size: 25px;
+  margin: 5px 0 0 5px;
+  line-height: .6;
+  color: var(--light);
+  margin: 2px 0;
+}
+
+
+.time-box{
+  display: flex;
+  width: 30px;
+  height: 35px;
+  -webkit-text-stroke: 0.5px var(--dark);
+  color: var(--light);
+  font-size: 30px;
+  font-family: "Francois One", sans-serif;
+  text-align: center;
+  justify-content: center;
+}
+
+.time-container{
+  display: flex;
+  width: 100%;
+  height: fit-content;
+  gap: 3px;
+  padding: 5px;
+  align-items: center;
+  line-height: 1.2;
+  text-align: center;
+  justify-content: center;
+}
+
