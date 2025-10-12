@@ -1,70 +1,99 @@
-# Getting Started with Create React App
+# Duebit
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+**Duebit** is a cross-platform desktop application built with **Electron.js** and **React** for managing due dates, reminders, and lightweight productivity tasks. Designed to be sleek, offline-ready, and distraction-free, Duebit combines the flexibility of a web interface with the performance of a native desktop app.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 🚀 Features
 
-### `npm start`
+- 🧭 **Task & Due Date Tracking** — Add, edit, and remove tasks with intuitive due-date assignment.  
+- 🔔 **Local Notifications** — Get reminders before deadlines using your system’s native notifications (in progress).
+- 💾 **Offline Storage** — Automatically saves data locally; no sign-in required (in progress). 
+- ⚡ **Cross-Platform** — Runs on macOS, Windows, and Linux via Electron.  
+- 🧱 **React Frontend + Electron Backend** — Modern UI with local system integration.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 🛠️ Tech Stack
 
-### `npm test`
+| Layer | Technology |
+|-------|-------------|
+| UI | React.js, CSS Modules |
+| Backend | Electron.js |
+| Build Tools | Node.js, npm, Webpack |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+---
 
-### `npm run build`
+## 🧩 Project Structure
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```
+duebit/
+├── public/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   ├── utils/
+│   └── App.js
+├── electron.js
+├── package.json
+└── README.md
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+---
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## 🧰 Setup & Development
 
-### `npm run eject`
+### 1. Install dependencies
+```bash
+npm install
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### 2. Run in development mode
+This starts both React and Electron with live reload:
+```bash
+npm run dev
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+*(If your setup doesn’t use a combined dev command, run these separately:)*
+```bash
+npm run build     # rebuild React frontend
+npm run electron  # launch Electron app
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### 3. Build for production
+```bash
+npm run build
+```
+Then package the desktop app with your preferred Electron packager.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+---
 
-## Learn More
+## 🧠 How It Works
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+The React frontend is bundled into a static `build/` directory, which Electron loads as its main window.  
+The Electron process handles system-level APIs — notifications, file access, and local persistence — while the React app manages user interactions.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+---
 
-### Code Splitting
+## 📦 Scripts
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+| Command | Description |
+|----------|-------------|
+| `npm start` | Runs the React development server |
+| `npm run build` | Builds the production-ready frontend |
+| `npm run electron` | Launches Electron with the built frontend |
+| `npm run dev` | (Optional) Runs both concurrently for live development |
 
-### Analyzing the Bundle Size
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## 🧑‍💻 Author
 
-### Making a Progressive Web App
+**Kaylin Von Bergen**  
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+---
 
-### Advanced Configuration
+## 📄 License
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+This project is licensed under the [MIT License](LICENSE).
 
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+---
