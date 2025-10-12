@@ -1,4 +1,4 @@
-# Duebit
+# Duebit (IN PROGRESS)
 
 **Duebit** is a cross-platform desktop application built with **Electron.js** and **React** for managing due dates, reminders, and lightweight productivity tasks. Designed to be sleek, offline-ready, and distraction-free, Duebit combines the flexibility of a web interface with the performance of a native desktop app.
 
