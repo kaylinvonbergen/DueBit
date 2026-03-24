@@ -61,6 +61,9 @@
 .logo{
   height: 8vh;
 }
+.icon{
+  height: 90%;
+}
 .bar {
   display: flex;
   background-color: var(--light-50);
@@ -98,7 +101,6 @@
   padding: 20px;
 }
 .block{
-  
   align-items: start;
   background-color: var(--light-25);
   border: 2px solid var(--dark);
@@ -109,13 +111,13 @@
 }.task-section{
   overflow-y: scroll;
   overflow-x: hidden;
-  height: 540px;
+  height: 70vh;
   width: 100%;
 }.time-section{
-  height: 259px;
+  height: 33.5vh;
   width: 100%;
 }.tba-section{
-  height: 256px;
+  height: 33.5vh;
   width: 100%;
 }
 
@@ -146,6 +148,9 @@
   font-family: 'Francois One', sans-serif;
   font-size: 26px;
   color: var(--light);
+  display: flex;
+  justify-content: center;
+  align-items: center; 
 }
 
 .body-text{

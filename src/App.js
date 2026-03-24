@@ -85,11 +85,30 @@ function App() {
 
         <div className='adjacent-content'>
           <div className='bar side'>
-            <button className='navigator-button'>git</button>
-            <button className='navigator-button'>top</button>
-            <button className='navigator-button'>task</button>
-            <button className='navigator-button'></button>
-            <button className='navigator-button'>sett</button>
+
+            <button title ='Click to open GitHub' className='navigator-button'>git</button>
+            
+            <button title ='Click to open topics' className='navigator-button'>
+              <img className='icon'
+                src='../public/topic-icon.png'>
+              </img>
+            </button>
+
+            <button title ='Click to open tasks' className='navigator-button'>
+                <img className='icon'
+                  src='../public/task-icon.png'>
+              </img>
+            </button>
+
+            <button title ='Click to open TBA' className='navigator-button'></button>
+
+            <button title ='Click to open settings' className='navigator-button'>
+              <img className='icon'
+                src='../public/settings-icon.png'>
+              </img>
+            </button>
+
+            
           </div>
 
 
