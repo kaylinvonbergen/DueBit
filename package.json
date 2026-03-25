@@ -17,7 +17,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "electron": "electron public/electron.js",
+    "electron": "electron electron/main.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -41,7 +41,25 @@
     ]
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "concurrently": "^9.2.0",
+    "electron-builder": "^26.8.1",
     "electron-reload": "^2.0.0-alpha.1"
+  },
+  "build": {
+    "appId": "com.kaylin.duebit",
+    "productName": "DueBit",
+    "directories": {
+      "buildResources": "assets"
+    },
+    "mac": {
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "icon": "assets/icon.png"
+    }
   }
 }

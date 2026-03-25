@@ -127,12 +127,14 @@
   height: 80%;
   float: left;
 }.topic-gallery{
+  width: 100%;
   padding-left: 10px;
   justify-content: space-evenly;
   gap: 7px;
   scrollbar-width: thin;
   padding-bottom: 10px;
   box-sizing: border-box;
+  height: 62vh;
 }.create-topic{
   display: flex;
   flex-direction: column;
@@ -177,7 +179,7 @@
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
 }.done-button {
   margin-top: auto; 
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   width: 80%;         /* so it can be centered nicely */
   align-self: center; /* centers horizontally */
   background-color: var(--light-75);
@@ -204,13 +206,16 @@
 
 
 .task-gallery{
+  width: 100%;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-evenly;
+  align-content: flex-start;
   gap: 7px;
   scrollbar-width: thin;
   padding-bottom: 10px;
   box-sizing: border-box;
+  overflow-y: auto;
 }
 
 
@@ -394,12 +399,6 @@
   overflow-y: scroll;
 }
 
-.topic-gallery {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  overflow-y: auto;
-}
 
 .create-topic {
   width: 68%;
@@ -501,14 +500,14 @@
 
 .tasks-list {
   width: 32%;
-  height: 75vh;
+  height: 70vh;
   display: flex;
   flex-direction: column;
 }
 
 .create-task {
   width: 68%;
-  height: 75vh;
+  height: 70vh;
   background-color: var(--light-25);
   padding: 16px 20px;
   box-sizing: border-box;
@@ -516,13 +515,7 @@
   flex-direction: column;
 }
 
-.task-gallery {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 12px;
-  overflow-y: auto;
-}
+
 
 .task-form {
   width: 100%;
