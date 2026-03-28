@@ -17,6 +17,11 @@ const {
   updateBit,
   setBitComplete,
   deleteBit,
+  getUserName,
+  setUserName,
+  clearAppData,
+  exportAllData,
+  importAllData,
 } = require('./db');
 
 function registerIpcHandlers() {
@@ -81,6 +86,26 @@ function registerIpcHandlers() {
   ipcMain.handle('bits:delete', async (_event, bitId) => {
     return deleteBit(bitId);
   });
+
+  ipcMain.handle('settings:getUserName', async () => {
+    return getUserName();
+  });
+
+  ipcMain.handle('settings:setUserName', async (_event, name) => {
+    return setUserName(name);
+  });
+
+  ipcMain.handle('settings:clearAppData', async () => {
+    return clearAppData();
+  });
+
+  ipcMain.handle('settings:exportAllData', async () => {
+    return exportAllData();
+  });
+
+  ipcMain.handle('settings:importAllData', async (_event, data) => {
+    return importAllData(data);
+  });
 }
 
 function createMainWindow() {
@@ -103,6 +128,8 @@ function createMainWindow() {
   });
 
   mainWindow.loadURL(startUrl);
+
+   mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {

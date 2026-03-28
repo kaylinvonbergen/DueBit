@@ -32,13 +32,26 @@ function convertTimeCharList(time) {
   let minutes = (safeTime % 60).toString();
 
   if (minutes.length === 1) {
-     minutes = '0' + minutes;
+    minutes = '0' + minutes;
   }
   if (hours.length === 1) {
     hours = '0' + hours;
   }
 
   return [hours[0], hours[1], minutes[0], minutes[1]];
+}
+
+function toLocalDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date, days) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
 }
 
 function App() {
@@ -61,6 +74,26 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [bits, setBits] = useState([]);
 
+  const [undoSnackbar, setUndoSnackbar] = useState(null);
+  const [userName, setUserName] = useState('');
+
+  const topicColorById = useMemo(() => {
+    const map = {};
+    for (const topic of topics) {
+      map[topic.id] = topic.color;
+    }
+    return map;
+  }, [topics]);
+
+  const taskColorById = useMemo(() => {
+    const map = {};
+    for (const task of tasks) {
+      map[task.id] = topicColorById[task.topicId] || 'light';
+    }
+    return map;
+  }, [tasks, topicColorById]);
+
+
   const selectedTimeTopic = useMemo(
     () => topics.find((topic) => String(topic.id) === String(selectedTimeTopicId)) || null,
     [topics, selectedTimeTopicId]
@@ -82,70 +115,79 @@ function App() {
     }
   }, [selectedTimeTopic]);
 
-async function loadAllData() {
-  try {
-    if (!window.duebit) {
-      console.error('DueBit Electron API is not available.');
-      return;
-    }
+  async function loadAllData() {
+    try {
+      if (!window.duebit) {
+        console.error('DueBit Electron API is not available.');
+        return;
+      }
 
-    const dbTopics = await window.duebit.topics.getAll();
+      const savedName = await window.duebit.settings.getUserName();
+      setUserName(savedName || '');
 
-    const mappedTopics = dbTopics.map((topic) => ({
-      id: topic.id,
-      name: topic.name,
-      color: topic.color,
-      weeklyTime: topic.weekly_time_goal,
-      completedTime: 0,
-    }));
+      const dbTopics = await window.duebit.topics.getAll();
 
-    setTopics(mappedTopics);
-
-    const dbTasks = await window.duebit.tasks.getAll();
-
-    const mappedTasks = dbTasks.map((task) => ({
-      id: task.id,
-      name: task.name,
-      topicId: task.topic_id ?? null,
-      topicName: task.topic_name || '',
-      topicColor: task.topic_color || 'light',
-      numBits: task.num_bits ?? 1,
-      complete: Boolean(task.complete),
-      duedate: task.due_datetime || '',
-      dueon: task.due_on || '',
-      isLate: false,
-      repeats: task.repeats || 'never',
-    }));
-
-    setTasks(mappedTasks);
-
-    const allBits = [];
-
-    for (const task of dbTasks) {
-      const taskBits = await window.duebit.bits.getByTaskId(task.id);
-
-      const taskColor =
-        dbTopics.find((topic) => topic.id === task.topic_id)?.color || 'light';
-
-      const mappedBits = taskBits.map((bit) => ({
-        id: bit.id,
-        taskId: bit.task_id,
-        task: task.name,
-        description: bit.description,
-        dodate: bit.do_date || '',
-        complete: Boolean(bit.complete),
-        isLate: false,
-        color: taskColor,
+      const mappedTopics = dbTopics.map((topic) => ({
+        id: topic.id,
+        name: topic.name,
+        color: topic.color,
+        weeklyTime: topic.weekly_time_goal,
+        completedTime: 0,
       }));
 
-      allBits.push(...mappedBits);
-    }
+      setTopics(mappedTopics);
 
-    setBits(allBits);
-  } catch (error) {
-    console.error('Failed to load app data:', error);
+      const dbTasks = await window.duebit.tasks.getAll();
+
+      const mappedTasks = dbTasks.map((task) => {
+        const matchingTopic = dbTopics.find(
+          (topic) => String(topic.id) === String(task.topic_id)
+        );
+
+        return {
+          id: task.id,
+          name: task.name,
+          topicId: task.topic_id ?? null,
+          topicName: task.topic_name || '',
+          topicColor: matchingTopic?.color || 'light',
+          numBits: task.num_bits ?? 1,
+          complete: Boolean(task.complete),
+          duedate: task.due_datetime || '',
+          dueon: task.due_on || '',
+          isLate: false,
+          repeats: task.repeats || 'never',
+        };
+      });
+
+      setTasks(mappedTasks);
+
+      const allBits = [];
+
+      for (const task of dbTasks) {
+        const taskBits = await window.duebit.bits.getByTaskId(task.id);
+
+        const taskColor =
+          dbTopics.find((topic) => String(topic.id) === String(task.topic_id))?.color || 'light';
+
+        const mappedBits = taskBits.map((bit) => ({
+          id: bit.id,
+          taskId: bit.task_id,
+          task: task.name,
+          description: bit.description,
+          dodate: bit.do_date || '',
+          complete: Boolean(bit.complete),
+          isLate: false,
+          color: taskColor,
+        }));
+
+        allBits.push(...mappedBits);
+      }
+
+      setBits(allBits);
+    } catch (error) {
+      console.error('Failed to load app data:', error);
+    }
   }
-}
 
   function handleSelectTopic(topic) {
     setSelectedTopicId(topic.id);
@@ -209,6 +251,30 @@ async function loadAllData() {
       alert(error?.message || 'Failed to save topic.');
     }
   }
+
+async function handleDeleteTopic() {
+  if (!selectedTopicId || selectedTopicId === 'new') return;
+
+  const topic = topics.find(
+    (t) => String(t.id) === String(selectedTopicId)
+  );
+
+  const confirmed = window.confirm(
+    `Delete "${topic?.name || 'this topic'}" and all tasks associated with it? This cannot be undone.`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await window.duebit.topics.delete(Number(selectedTopicId));
+    await loadAllData();
+    closeTopicPopup();
+  } catch (error) {
+    console.error('Failed to delete topic:', error);
+    alert('Failed to delete topic.');
+  }
+}
+
 
   function handleSelectTask(task) {
     setSelectedTaskId(task.id);
@@ -339,6 +405,30 @@ async function loadAllData() {
     }
   }
 
+async function handleDeleteTask() {
+  if (!selectedTaskId || selectedTaskId === 'new') return;
+
+  const task = tasks.find(
+    (t) => String(t.id) === String(selectedTaskId)
+  );
+
+  const confirmed = window.confirm(
+    `Delete "${task?.name || 'this task'}" and all of its bits? This cannot be undone.`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await window.duebit.tasks.delete(Number(selectedTaskId));
+    await loadAllData();
+    closeTaskPopup();
+  } catch (error) {
+    console.error('Failed to delete task:', error);
+    alert('Failed to delete task.');
+  }
+}
+
+
   function closeTaskPopup() {
     setShowTasksPopup(false);
     setSelectedTaskId(null);
@@ -350,6 +440,142 @@ async function loadAllData() {
     setSelectedTopicId(null);
     setTopicForm(emptyTopicForm);
   }
+
+  function getTaskColor(task) {
+    const topic = topics.find(
+      (topic) => String(topic.id) === String(task.topicId)
+    );
+    return topic?.color || 'light';
+  }
+
+  function getBitColor(bit) {
+    const task = tasks.find(
+      (task) => String(task.id) === String(bit.taskId)
+    );
+
+    if (!task) return 'light';
+
+    const topic = topics.find(
+      (topic) => String(topic.id) === String(task.topicId)
+    );
+
+    return topic?.color || 'light';
+  }
+
+
+
+  const categorizedBits = useMemo(() => {
+    const todayDate = new Date();
+    const todayString = toLocalDateString(todayDate);
+    const tomorrowString = toLocalDateString(addDays(todayDate, 1));
+
+    const incompleteBits = bits.filter((bit) => !bit.complete && bit.dodate);
+
+    const lateBits = incompleteBits.filter((bit) => bit.dodate < todayString);
+
+    const todayBits = incompleteBits.filter((bit) => bit.dodate === todayString);
+
+    const tomorrowBits = incompleteBits.filter((bit) => bit.dodate === tomorrowString);
+
+    const laterBits = incompleteBits
+      .filter((bit) => bit.dodate > tomorrowString)
+      .sort((a, b) => a.dodate.localeCompare(b.dodate));
+
+    return {
+      lateBits,
+      todayBits,
+      tomorrowBits,
+      laterBits,
+    };
+  }, [bits]);
+
+  const { lateBits, todayBits, tomorrowBits, laterBits } = categorizedBits;
+
+  async function handleCompleteBit(bit) {
+    try {
+      await window.duebit.bits.setComplete(bit.id, true);
+      await loadAllData();
+
+      setUndoSnackbar({
+        bitId: bit.id,
+        message: `Marked "${bit.description}" complete.`,
+      });
+
+      setTimeout(() => {
+        setUndoSnackbar((current) =>
+          current?.bitId === bit.id ? null : current
+        );
+      }, 5000);
+    } catch (error) {
+      console.error('Failed to complete bit:', error);
+    }
+  }
+
+  async function handleUndoCompleteBit() {
+    if (!undoSnackbar) return;
+
+    try {
+      await window.duebit.bits.setComplete(undoSnackbar.bitId, false);
+      await loadAllData();
+      setUndoSnackbar(null);
+    } catch (error) {
+      console.error('Failed to undo completed bit:', error);
+    }
+  }
+
+  function handleEditBit(bit) {
+    const parentTask = tasks.find((task) => String(task.id) === String(bit.taskId));
+
+    if (!parentTask) return;
+
+    handleSelectTask(parentTask);
+    setShowTasksPopup(true);
+  }
+
+  async function handleSaveUserName() {
+    try {
+      await window.duebit.settings.setUserName(userName.trim());
+    } catch (error) {
+      console.error('Failed to save user name:', error);
+    }
+  }
+
+  async function handleClearAllData() {
+    const confirmed = window.confirm(
+      'Are you sure you want to clear all topics, tasks, and bits? Your name will be kept.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await window.duebit.settings.clearAppData();
+      await loadAllData();
+      setShowSettingsPopup(false);
+    } catch (error) {
+      console.error('Failed to clear app data:', error);
+    }
+  }
+
+  async function handleExportData() {
+    try {
+      const data = await window.duebit.settings.exportAllData();
+      console.log('Exported data:', data);
+
+      // placeholder for now
+      alert('Export function connected. Next step is saving this JSON to a file.');
+    } catch (error) {
+      console.error('Failed to export data:', error);
+    }
+  }
+
+  async function handleImportData() {
+    try {
+      alert('Import function placeholder. Next step is selecting a JSON file and loading it.');
+    } catch (error) {
+      console.error('Failed to import data:', error);
+    }
+  }
+
 
   return (
     <div className="App">
@@ -363,7 +589,12 @@ async function loadAllData() {
 
         <div className="adjacent-content">
           <div className="bar side">
-            <button title="Click to open GitHub" className="navigator-button">
+            
+            <button
+              title="Click to open GitHub"
+              className="navigator-button"
+              onClick={() => window.open("https://github.com/kaylinvonbergen/DueBit", "_blank")}
+            >
               git
             </button>
 
@@ -397,7 +628,7 @@ async function loadAllData() {
           <div className="content">
             <div className="block expo">
               <h1 className="block-heading">
-                <u> GET THINGS DONE, BIT BY BIT</u>
+                <u> Hey, {userName || 'there'}! </u>
               </h1>
             </div>
 
@@ -408,59 +639,148 @@ async function loadAllData() {
                 </h1>
 
                 <div className="task-gallery">
-                  <h1 className="block-heading time-heading">TODAY</h1>
-                  <div
-                    style={{
-                      backgroundColor: 'var(--light)',
-                      height: '5px',
-                      width: '100%',
-                    }}
-                  ></div>
+                  {lateBits.length > 0 && (
+                    <div className="bit-section">
+                      <h1 className="block-heading time-heading">LATE</h1>
+                      <div className="section-divider"></div>
 
-                  {bits.map((bit) => (
-                    <Card
-                      key={`today-${bit.id}`}
-                      title={bit.task}
-                      description={bit.description}
-                      color={bit.color}
-                    />
-                  ))}
+                      <div className="bit-grid">
+                        {lateBits.map((bit) => (
+                          <div key={`today-${bit.id}`} className="bit-card-wrapper">
+                            <Card
+                              key={`late-${bit.id}`}
+                              title={bit.task}
+                              description={bit.description}
+                              color={bit.color || 'light'}
+                            />
+                            <div className="bit-card-actions">
+                              <button
+                                className="bit-action-button"
+                                onClick={() => handleCompleteBit(bit)}
+                                title="Mark complete"
+                              >
+                                ✓
+                              </button>
 
-                  <h1 className="block-heading time-heading">TOMORROW</h1>
-                  <div
-                    style={{
-                      backgroundColor: 'var(--light)',
-                      height: '5px',
-                      width: '100%',
-                    }}
-                  ></div>
+                              <button
+                                className="bit-action-button"
+                                onClick={() => handleEditBit(bit)}
+                                title="Edit bit"
+                              >
+                                Edit
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                  {bits.map((bit) => (
-                    <Card
-                      key={`tomorrow-${bit.id}`}
-                      title={bit.task}
-                      description={bit.description}
-                      color={bit.color}
-                    />
-                  ))}
+                  <div className="bit-section">
+                    <h1 className="block-heading time-heading">TODAY</h1>
+                    <div className="section-divider"></div>
 
-                  <h1 className="block-heading time-heading">LATER</h1>
-                  <div
-                    style={{
-                      backgroundColor: 'var(--light)',
-                      height: '5px',
-                      width: '100%',
-                    }}
-                  ></div>
+                    <div className="bit-grid">
+                      {todayBits.map((bit) => (
+                        <div key={`today-${bit.id}`} className="bit-card-wrapper">
+                          <Card
+                            key={`today-${bit.id}`}
+                            title={bit.task}
+                            description={bit.description}
+                            color={bit.color || 'light'}
+                          />
+                          <div className="bit-card-actions">
+                            <button
+                              className="bit-action-button"
+                              onClick={() => handleCompleteBit(bit)}
+                              title="Mark complete"
+                            >
+                              ✓
+                            </button>
 
-                  {bits.map((bit) => (
-                    <Card
-                      key={`later-${bit.id}`}
-                      title={bit.task}
-                      description={bit.description}
-                      color={bit.color}
-                    />
-                  ))}
+                            <button
+                              className="bit-action-button"
+                              onClick={() => handleEditBit(bit)}
+                              title="Edit bit"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bit-section">
+                    <h1 className="block-heading time-heading">TOMORROW</h1>
+                    <div className="section-divider"></div>
+
+                    <div className="bit-grid">
+                      {tomorrowBits.map((bit) => (
+                        <div key={`today-${bit.id}`} className="bit-card-wrapper">
+                          <Card
+                            key={`tomorrow-${bit.id}`}
+                            title={bit.task}
+                            description={bit.description}
+                            color={bit.color || 'light'}
+                          />
+                          <div className="bit-card-actions">
+                            <button
+                              className="bit-action-button"
+                              onClick={() => handleCompleteBit(bit)}
+                              title="Mark complete"
+                            >
+                              ✓
+                            </button>
+
+                            <button
+                              className="bit-action-button"
+                              onClick={() => handleEditBit(bit)}
+                              title="Edit bit"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bit-section">
+                    <h1 className="block-heading time-heading">LATER</h1>
+                    <div className="section-divider"></div>
+
+                    <div className="bit-grid">
+                      {laterBits.map((bit) => (
+                        <div key={`later-${bit.id}`} className="bit-card-wrapper">
+                          <Card
+                            key={`later-${bit.id}`}
+                            title={bit.task}
+                            description={bit.description}
+                            color={bit.color || 'light'}
+                          />
+                          <div className="bit-card-actions">
+                            <button
+                              className="bit-action-button"
+                              onClick={() => handleCompleteBit(bit)}
+                              title="Mark complete"
+                            >
+                              ✓
+                            </button>
+
+                            <button
+                              className="bit-action-button"
+                              onClick={() => handleEditBit(bit)}
+                              title="Edit bit"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                  </div>
                 </div>
               </div>
 
@@ -592,7 +912,7 @@ async function loadAllData() {
                   <div className="block topics-list">
                     <h1 className="block-heading time-heading centered-heading">Your Topics</h1>
 
-                    <div className="topic-gallery task-gallery">
+                    <div className="topic-gallery task-gallery-popup">
                       <div onClick={handleCreateNewTopic}>
                         <Card title="+ add new" description="" color="light" />
                       </div>
@@ -636,9 +956,8 @@ async function loadAllData() {
                                 <button
                                   key={color}
                                   type="button"
-                                  className={`color-swatch ${
-                                    topicForm.color === color ? 'selected' : ''
-                                  }`}
+                                  className={`color-swatch ${topicForm.color === color ? 'selected' : ''
+                                    }`}
                                   style={{ backgroundColor: `var(--${color})` }}
                                   onClick={() => handleTopicFormChange('color', color)}
                                 />
@@ -674,10 +993,17 @@ async function loadAllData() {
                             </div>
                           </div>
                         </div>
+                        <div className="settings-action-row">
+                          {selectedTopicId !== 'new' && (
+                            <button className="danger-button" onClick={handleDeleteTopic}>
+                              delete topic
+                            </button>
+                          )}
 
-                        <button className="done-button" onClick={handleSaveTopic}>
-                          save
-                        </button>
+                          <button className="done-button settings-button" onClick={handleSaveTopic}>
+                            save
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
@@ -705,7 +1031,7 @@ async function loadAllData() {
                   <div className="block topics-list">
                     <h1 className="block-heading time-heading centered-heading">Your Tasks</h1>
 
-                    <div className="topic-gallery task-gallery">
+                    <div className="topic-gallery task-gallery-popup">
                       <div onClick={handleCreateNewTask}>
                         <Card title="+ add new" description="" color="light" />
                       </div>
@@ -884,10 +1210,18 @@ async function loadAllData() {
                             ))}
                           </div>
                         </div>
+                        
+                        <div className="settings-action-row">
+                          {selectedTopicId !== 'new' && (
+                            <button className="danger-button" onClick={handleDeleteTask}>
+                              delete task
+                            </button>
+                          )}
 
-                        <button className="done-button" onClick={handleSaveTask}>
-                          save
-                        </button>
+                          <button className="done-button settings-button" onClick={handleSaveTask}>
+                            save
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
@@ -911,12 +1245,65 @@ async function loadAllData() {
               </button>
 
               <div className="pop-content">
-                <div className="empty-task-editor">
+                <div className="block create-task settings-panel">
                   <h1 className="block-heading time-heading centered-heading">Settings</h1>
-                  <p className="body-text empty-editor-text">Coming soon.</p>
+
+                  <div className="settings-form">
+                    <div className="settings-section">
+                      <h2 className="settings-section-title">Profile</h2>
+
+                      <label className="topic-form-label">Your Name</label>
+                      <input
+                        className="topic-input"
+                        type="text"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        placeholder="Enter your name"
+                      />
+
+                      <button className="done-button settings-button" onClick={handleSaveUserName}>
+                        Save Name
+                      </button>
+                    </div>
+
+                    <div className="settings-section">
+                      <h2 className="settings-section-title">Data</h2>
+
+                      <div className="settings-action-row">
+                        <button className="done-button settings-button" onClick={handleExportData}>
+                          Export Data
+                        </button>
+
+                        <button className="done-button settings-button" onClick={handleImportData}>
+                          Import Data
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-section danger-section">
+                      <h2 className="settings-section-title">Danger Zone</h2>
+
+                      <p className="body-text settings-help-text">
+                        This will delete all topics, tasks, and bits, but keep your saved name.
+                      </p>
+
+                      <button className="danger-button" onClick={handleClearAllData}>
+                        Clear All Data
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {undoSnackbar && (
+          <div className="snackbar">
+            <span>{undoSnackbar.message}</span>
+            <button className="snackbar-undo" onClick={handleUndoCompleteBit}>
+              Undo
+            </button>
           </div>
         )}
       </div>

@@ -55,6 +55,11 @@ function runMigrations(database) {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
   `);
 
   // Simple migration: older DBs may not have sort_order yet
@@ -175,13 +180,22 @@ function updateTopic(topic) {
   return getTopicById(topic.id);
 }
 
-function deleteTopic(id) {
+function deleteTopic(topicId) {
   const db = getDb();
 
-  return db.prepare(`
-    DELETE FROM topics
-    WHERE id = ?
-  `).run(id);
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      DELETE FROM tasks
+      WHERE topic_id = ?
+    `).run(topicId);
+
+    db.prepare(`
+      DELETE FROM topics
+      WHERE id = ?
+    `).run(topicId);
+  });
+
+  return transaction();
 }
 
 /* ------------------------------ TASKS ----------------------------- */
@@ -503,6 +517,215 @@ function deleteBit(id) {
   `).run(id);
 }
 
+function getSetting(key) {
+  const db = getDb();
+
+  const row = db.prepare(`
+    SELECT value
+    FROM settings
+    WHERE key = ?
+  `).get(key);
+
+  return row ? row.value : null;
+}
+
+function setSetting(key, value) {
+  const db = getDb();
+
+  db.prepare(`
+    INSERT INTO settings (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, value);
+
+  return getSetting(key);
+}
+
+function getUserName() {
+  return getSetting('display_name');
+}
+
+function setUserName(name) {
+  return setSetting('display_name', name);
+}
+
+function clearAppData() {
+  const db = getDb();
+
+  const transaction = db.transaction(() => {
+    db.prepare(`DELETE FROM bits`).run();
+    db.prepare(`DELETE FROM tasks`).run();
+    db.prepare(`DELETE FROM topics`).run();
+  });
+
+  transaction();
+}
+
+function clearAllIncludingSettings() {
+  const db = getDb();
+
+  const transaction = db.transaction(() => {
+    db.prepare(`DELETE FROM bits`).run();
+    db.prepare(`DELETE FROM tasks`).run();
+    db.prepare(`DELETE FROM topics`).run();
+    db.prepare(`DELETE FROM settings`).run();
+  });
+
+  transaction();
+}
+
+function exportAllData() {
+  const db = getDb();
+
+  const settingsRows = db.prepare(`
+    SELECT key, value
+    FROM settings
+  `).all();
+
+  const topics = db.prepare(`
+    SELECT *
+    FROM topics
+    ORDER BY id
+  `).all();
+
+  const tasks = db.prepare(`
+    SELECT *
+    FROM tasks
+    ORDER BY id
+  `).all();
+
+  const bits = db.prepare(`
+    SELECT *
+    FROM bits
+    ORDER BY id
+  `).all();
+
+  const settings = {};
+  for (const row of settingsRows) {
+    settings[row.key] = row.value;
+  }
+
+  return {
+    settings,
+    topics,
+    tasks,
+    bits,
+  };
+}
+
+function importAllData(data) {
+  const db = getDb();
+
+  const transaction = db.transaction(() => {
+    db.prepare(`DELETE FROM bits`).run();
+    db.prepare(`DELETE FROM tasks`).run();
+    db.prepare(`DELETE FROM topics`).run();
+    db.prepare(`DELETE FROM settings`).run();
+
+    if (data.settings) {
+      const insertSetting = db.prepare(`
+        INSERT INTO settings (key, value)
+        VALUES (?, ?)
+      `);
+
+      for (const [key, value] of Object.entries(data.settings)) {
+        insertSetting.run(key, value);
+      }
+    }
+
+    if (Array.isArray(data.topics)) {
+      const insertTopic = db.prepare(`
+        INSERT INTO topics (
+          id,
+          name,
+          color,
+          weekly_time_goal,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const topic of data.topics) {
+        insertTopic.run(
+          topic.id,
+          topic.name,
+          topic.color,
+          topic.weekly_time_goal ?? 0,
+          topic.created_at,
+          topic.updated_at
+        );
+      }
+    }
+
+    if (Array.isArray(data.tasks)) {
+      const insertTask = db.prepare(`
+        INSERT INTO tasks (
+          id,
+          name,
+          topic_id,
+          due_datetime,
+          due_on,
+          repeats,
+          complete,
+          completed_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const task of data.tasks) {
+        insertTask.run(
+          task.id,
+          task.name,
+          task.topic_id ?? null,
+          task.due_datetime ?? null,
+          task.due_on ?? null,
+          task.repeats ?? 'never',
+          task.complete ?? 0,
+          task.completed_at ?? null,
+          task.created_at,
+          task.updated_at
+        );
+      }
+    }
+
+    if (Array.isArray(data.bits)) {
+      const insertBit = db.prepare(`
+        INSERT INTO bits (
+          id,
+          task_id,
+          description,
+          do_date,
+          sort_order,
+          complete,
+          completed_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const bit of data.bits) {
+        insertBit.run(
+          bit.id,
+          bit.task_id,
+          bit.description ?? '',
+          bit.do_date ?? null,
+          bit.sort_order ?? 0,
+          bit.complete ?? 0,
+          bit.completed_at ?? null,
+          bit.created_at,
+          bit.updated_at
+        );
+      }
+    }
+  });
+
+  transaction();
+}
+
 module.exports = {
   initDb,
   getDb,
@@ -526,4 +749,12 @@ module.exports = {
   updateBit,
   setBitComplete,
   deleteBit,
+
+  getSetting,
+  setSetting,
+  getUserName,
+  setUserName,
+  clearAppData,
+  exportAllData,
+  importAllData,
 };

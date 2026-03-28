@@ -27,4 +27,11 @@ contextBridge.exposeInMainWorld('duebit', {
     setComplete: (bitId, complete) =>
       ipcRenderer.invoke('bits:setComplete', bitId, complete),
   },
+  settings: {
+    getUserName: () => ipcRenderer.invoke('settings:getUserName'),
+    setUserName: (name) => ipcRenderer.invoke('settings:setUserName', name),
+    clearAppData: () => ipcRenderer.invoke('settings:clearAppData'),
+    exportAllData: () => ipcRenderer.invoke('settings:exportAllData'),
+    importAllData: (data) => ipcRenderer.invoke('settings:importAllData', data),
+  },
 });
