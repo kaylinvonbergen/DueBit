@@ -5,6 +5,7 @@ import logo from './assets/LOGO.png';
 import topicIcon from './assets/topic-icon.png';
 import taskIcon from './assets/task-icon.png';
 import settingsIcon from './assets/settings-icon.png';
+import RichTextEditor from './components/RichTextEditor';
 
 
 const emptyTopicForm = {
@@ -19,6 +20,8 @@ const emptyTaskForm = {
   id: null,
   name: '',
   topicId: '',
+  isBacklog: false,
+  notes: '',
   numBits: 1,
   repeats: 'never',
   dueDate: '',
@@ -149,8 +152,9 @@ function App() {
 
       const mappedTasks = dbTasks.map((task) => {
         const matchingTopic = dbTopics.find(
-          (topic) => String(topic.id) === String(task.topic_id)
+          (topic) => String(topic.id) === String(task.topic_id),
         );
+        
 
         return {
           id: task.id,
@@ -158,6 +162,8 @@ function App() {
           topicId: task.topic_id ?? null,
           topicName: task.topic_name || '',
           topicColor: matchingTopic?.color || 'light',
+          isBacklog: Boolean(task.is_backlog),
+          notes: task.notes || '',
           numBits: task.num_bits ?? 1,
           complete: Boolean(task.complete),
           duedate: task.due_datetime || '',
@@ -186,6 +192,7 @@ function App() {
           complete: Boolean(bit.complete),
           isLate: false,
           color: taskColor,
+          sortOrder: bit.sort_order,
         }));
 
         allBits.push(...mappedBits);
@@ -288,13 +295,10 @@ function App() {
     setSelectedTaskId(task.id);
 
     const matchingBits = bits
-      .filter((bit) => bit.taskId === task.id)
-      .sort((a, b) => {
-        const aDate = a.dodate || '';
-        const bDate = b.dodate || '';
-        return aDate.localeCompare(bDate);
-      })
-      .map((bit) => ({
+      .filter(bit => bit.taskId === task.id)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(bit => ({
+        id: bit.id,
         description: bit.description || '',
         doDate: bit.dodate || '',
       }));
@@ -303,11 +307,15 @@ function App() {
       id: task.id,
       name: task.name || '',
       topicId: task.topicId ?? '',
-      numBits: task.numBits || 1,
+      isBacklog: Boolean(task.isBacklog),
+      notes: task.notes || '',
+      numBits: Math.max(1, matchingBits.length),
       repeats: task.repeats || 'never',
       dueDate: task.duedate || '',
       dueOn: task.dueon || '',
-      bits: matchingBits.length > 0 ? matchingBits : [{ description: '', doDate: '' }],
+      bits: matchingBits.length
+        ? matchingBits
+        : [{ description: '', doDate: '' }],
     });
   }
 
@@ -323,6 +331,13 @@ function App() {
     setTaskForm((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  }
+
+  function handleBacklogToggle(isBacklog) {
+    setTaskForm(prev => ({
+      ...prev,
+      isBacklog,
     }));
   }
 
@@ -378,24 +393,60 @@ function App() {
 
   async function handleSaveTask() {
     try {
-      const payload = {
-        name: taskForm.name.trim(),
-        topicId: taskForm.topicId ? Number(taskForm.topicId) : null,
-        numBits: taskForm.numBits,
-        repeats: taskForm.repeats,
-        dueDateTime: taskForm.repeats === 'never' ? taskForm.dueDate : '',
-        dueOn: taskForm.repeats === 'weekly' ? taskForm.dueOn : '',
-        bits: taskForm.bits.map((bit, index) => ({
-          description: bit.description.trim(),
-          doDate: taskForm.repeats === 'never' ? bit.doDate : '',
-          sortOrder: index,
-        })),
-      };
-
-      if (!payload.name) {
-        console.error('Task name is required.');
+      if (!taskForm.name.trim()) {
+        alert('Task name is required.');
         return;
       }
+
+      const existingTask = tasks.find(
+        task => task.id === taskForm.id
+      );
+
+      if (
+        taskForm.isBacklog &&
+        existingTask &&
+        !existingTask.isBacklog &&
+        bits.some(bit => bit.taskId === taskForm.id)
+      ) {
+        const confirmed = window.confirm(
+          'Converting this task to a backlog task will remove ' +
+          'all its bits and scheduling information. Continue?'
+        );
+
+        if (!confirmed) return;
+      }
+
+      const payload = {
+        name: taskForm.name.trim(),
+        topicId: taskForm.topicId
+          ? Number(taskForm.topicId)
+          : null,
+        isBacklog: taskForm.isBacklog,
+        notes: taskForm.notes || '',
+        repeats: taskForm.isBacklog
+          ? 'never'
+          : taskForm.repeats,
+        dueDateTime: taskForm.isBacklog
+          ? null
+          : taskForm.repeats === 'never'
+            ? taskForm.dueDate
+            : null,
+        dueOn: taskForm.isBacklog
+          ? null
+          : taskForm.repeats === 'weekly'
+            ? taskForm.dueOn
+            : null,
+        bits: taskForm.isBacklog
+          ? []
+          : taskForm.bits.map((bit, index) => ({
+              id: bit.id,
+              description: bit.description.trim(),
+              doDate: taskForm.repeats === 'never'
+                ? bit.doDate
+                : null,
+              sortOrder: index,
+            })),
+      };
 
       if (selectedTaskId === 'new') {
         await window.duebit.tasks.create(payload);
@@ -410,6 +461,7 @@ function App() {
       closeTaskPopup();
     } catch (error) {
       console.error('Failed to save task:', error);
+      alert(error.message || 'Failed to save task.');
     }
   }
 
@@ -518,6 +570,12 @@ function App() {
     laterBits,
   } = categorizedBits;
 
+  const backlogTasks = useMemo(() => {
+    return tasks.filter(
+      task => task.isBacklog && !task.complete
+    );
+  }, [tasks]);
+
   async function handleCompleteBit(bit) {
     try {
       await window.duebit.bits.setComplete(bit.id, true);
@@ -603,6 +661,27 @@ function App() {
     }
   }
 
+  async function handleCompleteBacklogTask(task) {
+    try {
+      await window.duebit.tasks.setComplete(task.id, true);
+      await loadAllData();
+    } catch (error) {
+      console.error('Failed to complete backlog task:', error);
+      alert('Failed to complete backlog task.');
+    }
+  }
+
+  function handleCreateBacklogTask() {
+    handleCreateNewTask();
+
+    setTaskForm({
+      ...emptyTaskForm,
+      isBacklog: true,
+      bits: [{ description: '', doDate: '' }],
+    });
+
+    setShowTasksPopup(true);
+  }
 
   return (
     <div className="App">
@@ -662,7 +741,7 @@ function App() {
             <div className="adjacent-content with-gap">
               <div className="block task-section">
                 <h1 className="block-heading">
-                  <u> TASKS</u>
+                  <u>SCHEDULED TASKS</u>
                 </h1>
 
                 <div className="task-gallery">
@@ -898,7 +977,7 @@ function App() {
                         ))}
                       </div>
                     </div>
-                  )}j
+                  )}
                 </div>
 
 
@@ -1011,7 +1090,62 @@ function App() {
                   </div>
                 </div>
 
-                <div className="block tba-section"></div>
+                <div className="block backlog-section">
+                  <div className="backlog-header">
+                    <h1 className="block-heading">
+                      <u>BACKLOG</u>
+                    </h1>
+
+                    <button
+                      className="backlog-add-button"
+                      onClick={handleCreateBacklogTask}
+                    >
+                      add task +
+                    </button>
+                  </div>
+
+                  <div className="backlog-grid">
+                    {backlogTasks.map(task => (
+                      <div
+                        key={task.id}
+                        className="bit-card-wrapper"
+                      >
+                        <Card
+                          title={task.name}
+                          description={task.topicName}
+                          color={task.topicColor || 'light'}
+                        />
+
+                        <div className="bit-card-actions">
+                          <button
+                            className="bit-action-button"
+                            onClick={() => handleCompleteBacklogTask(task)}
+                            title="Complete task"
+                          >
+                            ✓
+                          </button>
+
+                          <button
+                            className="bit-action-button"
+                            onClick={() => {
+                              handleSelectTask(task);
+                              setShowTasksPopup(true);
+                            }}
+                            title="Edit task"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {backlogTasks.length === 0 && (
+                    <p className="backlog-empty">
+                      Nothing in your backlog yet!
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1208,6 +1342,24 @@ function App() {
                             ))}
                           </select>
 
+                          <label className="backlog-toggle-row">
+                            <span>Backlog Task</span>
+
+                            <input
+                              type="checkbox"
+                              checked={taskForm.isBacklog}
+                              onChange={e =>
+                                handleBacklogToggle(e.target.checked)
+                              }
+                            />
+                          </label>
+
+                          
+
+
+                            
+                          {!taskForm.isBacklog && (
+                          <>
                           <label className="topic-form-label">Number of Bits</label>
                           <div className="bit-count-row">
                             <button
@@ -1229,6 +1381,7 @@ function App() {
                             </button>
                           </div>
 
+                          
                           <label className="topic-form-label">Repeats</label>
                           <div className="repeat-options">
                             <label className="radio-row">
@@ -1332,11 +1485,24 @@ function App() {
                               </div>
                             ))}
                           </div>
+                          </>
+                          )}
+                          <label className="topic-form-label">Notes</label>
+                          <RichTextEditor
+                            key={selectedTaskId}
+                            value={taskForm.notes}
+                            onChange={(value) =>
+                              handleTaskFormChange('notes', value)
+                            }
+                          />
                         </div>
 
                         <div className="settings-action-row">
-                          {selectedTopicId !== 'new' && (
-                            <button className="danger-button" onClick={handleDeleteTask}>
+                          {selectedTaskId !== 'new' && (
+                            <button
+                              className="danger-button"
+                              onClick={handleDeleteTask}
+                            >
                               delete task
                             </button>
                           )}
@@ -1347,6 +1513,8 @@ function App() {
                         </div>
                       </>
                     )}
+
+                    
                   </div>
                 </div>
               </div>

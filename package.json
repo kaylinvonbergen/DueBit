@@ -9,6 +9,9 @@
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
     "better-sqlite3": "^12.8.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -43,6 +46,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "concurrently": "^9.2.0",
+    "electron": "^33.4.11",
     "electron-builder": "^26.8.1",
     "electron-reload": "^2.0.0-alpha.1"
   },

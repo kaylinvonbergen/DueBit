@@ -33,6 +33,8 @@ function runMigrations(database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       topic_id INTEGER,
+      is_backlog INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
       due_datetime TEXT,
       due_on TEXT,
       repeats TEXT NOT NULL DEFAULT 'never',
@@ -72,6 +74,25 @@ function runMigrations(database) {
       ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0
     `);
   }
+
+  const taskColumns = database.prepare(
+    `PRAGMA table_info(tasks)`
+  ).all();
+
+  if (!taskColumns.some(col => col.name === 'is_backlog')) {
+    database.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN is_backlog INTEGER NOT NULL DEFAULT 0
+    `);
+  }
+
+  if (!taskColumns.some(col => col.name === 'notes')) {
+    database.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN notes TEXT NOT NULL DEFAULT ''
+    `);
+  }
+
 }
 
 function initDb() {
@@ -198,6 +219,66 @@ function deleteTopic(topicId) {
   return transaction();
 }
 
+const MAX_NOTES_LENGTH = 3000;
+
+function getNotesTextLength(notes) {
+  if (!notes) return 0;
+
+  let document;
+
+  try {
+    document = JSON.parse(notes);
+  } catch {
+    throw new Error('Invalid notes format.');
+  }
+
+  function extractText(node) {
+    if (!node || typeof node !== 'object') return '';
+
+    if (node.type === 'text') {
+      return node.text || '';
+    }
+
+    if (!Array.isArray(node.content)) return '';
+
+    return node.content.map(extractText).join(
+      ['doc', 'bulletList', 'orderedList'].includes(node.type)
+        ? '\n'
+        : ''
+    );
+  }
+
+  return extractText(document).length;
+}
+
+function normalizeTask(task) {
+  const isBacklog = Boolean(task.isBacklog);
+  const notes = task.notes || '';
+
+  if (!task.name?.trim()) {
+    throw new Error('Task name is required.');
+  }
+
+  if (typeof notes !== 'string') {
+    throw new Error('Notes must be serialized JSON.');
+  }
+
+  if (getNotesTextLength(notes) > MAX_NOTES_LENGTH) {
+    throw new Error('Notes cannot exceed 3,000 characters.');
+  }
+
+  return {
+    ...task,
+    name: task.name.trim(),
+    isBacklog: isBacklog ? 1 : 0,
+    notes,
+    repeats: isBacklog ? 'never' : (task.repeats || 'never'),
+    dueDateTime: isBacklog ? null : (task.dueDateTime || null),
+    dueOn: isBacklog ? null : (task.dueOn || null),
+    bits: isBacklog ? [] : (task.bits || []),
+  };
+}
+
 /* ------------------------------ TASKS ----------------------------- */
 
 function getTaskById(id) {
@@ -208,6 +289,8 @@ function getTaskById(id) {
       t.id,
       t.name,
       t.topic_id,
+      t.is_backlog,
+      t.notes,
       t.due_datetime,
       t.due_on,
       t.repeats,
@@ -236,6 +319,8 @@ function getAllTasks() {
       t.id,
       t.name,
       t.topic_id,
+      t.is_backlog,
+      t.notes,
       t.due_datetime,
       t.due_on,
       t.repeats,
@@ -264,35 +349,40 @@ function getAllTasks() {
   `).all();
 }
 
-function createTask(task) {
+function createTask(input) {
   const db = getDb();
+  const task = normalizeTask(input);
   const now = nowIso();
 
   const transaction = db.transaction(() => {
-    const taskResult = db.prepare(`
+    const result = db.prepare(`
       INSERT INTO tasks (
         name,
         topic_id,
         due_datetime,
         due_on,
         repeats,
+        is_backlog,
+        notes,
         complete,
         completed_at,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)
     `).run(
       task.name,
       task.topicId ?? null,
-      task.dueDateTime || null,
-      task.dueOn || null,
-      task.repeats || 'never',
+      task.dueDateTime,
+      task.dueOn,
+      task.repeats,
+      task.isBacklog,
+      task.notes,
       now,
       now
     );
 
-    const taskId = taskResult.lastInsertRowid;
+    const taskId = Number(result.lastInsertRowid);
 
     const insertBit = db.prepare(`
       INSERT INTO bits (
@@ -308,31 +398,46 @@ function createTask(task) {
       VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
     `);
 
-    if (Array.isArray(task.bits)) {
-      task.bits.forEach((bit, index) => {
-        insertBit.run(
-          taskId,
-          bit.description || '',
-          bit.doDate || null,
-          bit.sortOrder ?? index,
-          now,
-          now
-        );
-      });
-    }
+    task.bits.forEach((bit, index) => {
+      insertBit.run(
+        taskId,
+        bit.description || '',
+        bit.doDate || null,
+        index,
+        now,
+        now
+      );
+    });
 
     return taskId;
   });
 
-  const createdTaskId = transaction();
-  return getTaskById(createdTaskId);
+  return getTaskById(transaction());
 }
 
-function updateTask(task) {
+function deleteTask(taskId) {
   const db = getDb();
+
+  const result = db.prepare(`
+    DELETE FROM tasks
+    WHERE id = ?
+  `).run(taskId);
+
+  return result.changes > 0;
+}
+
+function updateTask(input) {
+  const db = getDb();
+  const task = normalizeTask(input);
   const now = nowIso();
 
   const transaction = db.transaction(() => {
+    const existing = getTaskById(task.id);
+
+    if (!existing) {
+      throw new Error('Task not found.');
+    }
+
     db.prepare(`
       UPDATE tasks
       SET
@@ -341,25 +446,44 @@ function updateTask(task) {
         due_datetime = ?,
         due_on = ?,
         repeats = ?,
+        is_backlog = ?,
+        notes = ?,
         updated_at = ?
       WHERE id = ?
     `).run(
       task.name,
       task.topicId ?? null,
-      task.dueDateTime || null,
-      task.dueOn || null,
-      task.repeats || 'never',
+      task.dueDateTime,
+      task.dueOn,
+      task.repeats,
+      task.isBacklog,
+      task.notes,
       now,
       task.id
     );
 
-    // Replace all bits for this task
-    db.prepare(`
-      DELETE FROM bits
-      WHERE task_id = ?
-    `).run(task.id);
+    if (task.isBacklog) {
+      db.prepare(`
+        DELETE FROM bits WHERE task_id = ?
+      `).run(task.id);
 
-    const insertBit = db.prepare(`
+      return task.id;
+    }
+
+    const existingBits = getBitsByTaskId(task.id);
+    const retainedIds = new Set();
+
+    const updateBitStatement = db.prepare(`
+      UPDATE bits
+      SET
+        description = ?,
+        do_date = ?,
+        sort_order = ?,
+        updated_at = ?
+      WHERE id = ? AND task_id = ?
+    `);
+
+    const insertBitStatement = db.prepare(`
       INSERT INTO bits (
         task_id,
         description,
@@ -373,33 +497,47 @@ function updateTask(task) {
       VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
     `);
 
-    if (Array.isArray(task.bits)) {
-      task.bits.forEach((bit, index) => {
-        insertBit.run(
+    task.bits.forEach((bit, index) => {
+      const existingBit = existingBits.find(
+        b => Number(b.id) === Number(bit.id)
+      );
+
+      if (existingBit) {
+        retainedIds.add(existingBit.id);
+
+        updateBitStatement.run(
+          bit.description || '',
+          bit.doDate || null,
+          index,
+          now,
+          existingBit.id,
+          task.id
+        );
+      } else {
+        insertBitStatement.run(
           task.id,
           bit.description || '',
           bit.doDate || null,
-          bit.sortOrder ?? index,
+          index,
           now,
           now
         );
-      });
+      }
+    });
+
+    for (const bit of existingBits) {
+      if (!retainedIds.has(bit.id)) {
+        db.prepare(`
+          DELETE FROM bits
+          WHERE id = ? AND task_id = ?
+        `).run(bit.id, task.id);
+      }
     }
 
     return task.id;
   });
 
-  const updatedTaskId = transaction();
-  return getTaskById(updatedTaskId);
-}
-
-function deleteTask(id) {
-  const db = getDb();
-
-  return db.prepare(`
-    DELETE FROM tasks
-    WHERE id = ?
-  `).run(id);
+  return getTaskById(transaction());
 }
 
 function setTaskComplete(taskId, complete) {
@@ -667,12 +805,14 @@ function importAllData(data) {
           due_datetime,
           due_on,
           repeats,
+          is_backlog,
+          notes,
           complete,
           completed_at,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       for (const task of data.tasks) {
@@ -683,6 +823,8 @@ function importAllData(data) {
           task.due_datetime ?? null,
           task.due_on ?? null,
           task.repeats ?? 'never',
+          task.is_backlog ?? 0,
+          task.notes ?? '',
           task.complete ?? 0,
           task.completed_at ?? null,
           task.created_at,
